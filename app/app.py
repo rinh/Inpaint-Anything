@@ -38,12 +38,12 @@ def setup_args(parser):
     )
     parser.add_argument(
         "--lama_ckpt", type=str,
-        default="pretrained_models/big-lama",
+        default="./models/big-lama",
         help="The path to the lama checkpoint.",
     )
     parser.add_argument(
         "--sam_ckpt", type=str,
-        default="./pretrained_models/sam_vit_h_4b8939.pth",
+        default="./models/sam/sam_vit_h_4b8939.pth",
         help="The path to the SAM checkpoint to use for mask generation.",
     )
 def mkstemp(suffix, dir=None):
