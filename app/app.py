@@ -2,6 +2,17 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.dirname(os.getcwd())))
 os.chdir("../")
+
+import base64
+from io import BytesIO
+import io
+from fastapi import APIRouter, Depends, FastAPI, Request, Response
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.exceptions import HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.encoders import jsonable_encoder 
+from pydantic import BaseModel, Field, create_model
+
 import gradio as gr
 import numpy as np
 from pathlib import Path
@@ -228,6 +239,87 @@ with gr.Blocks() as demo:
         [img, features, img_pointed, w, h, mask_0, mask_1, mask_2, img_with_mask_0, img_with_mask_1, img_with_mask_2, img_rm_with_mask_0, img_rm_with_mask_1, img_rm_with_mask_2]
     )
 
+
+
+def base64_to_img(base64_string):
+    img_bytes = BytesIO(base64.b64decode(base64_string))
+    img = Image.open(img_bytes)
+    return img
+
+
+def img_to_base64(img: Image):
+    _img = img
+    buffered = io.BytesIO()
+    _img.save(buffered, format='JPEG')
+    img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+    return img_str
+
+
+
+class RmAnyRequest(BaseModel):
+    image: str = Field(default=False, title="Image",
+                       description="Image to work on, must be a Base64 string containing the image's data.")
+    mask: str = Field(default=False, title="Mask Image",
+                      description="Image to work on, must be a Base64 string containing the image's data.")
+
+
+class RmAnyResponse(BaseModel):
+    image: str = Field(default=None, title="Image", description="The generated image in base64 format.")
+
+
+
+class Api:
+    
+    def __init__(self, app: FastAPI):
+        self.router = APIRouter()
+        self.app = app
+
+        self.add_api_route("/api/v1/hi", self.hi_api, methods=["GET"]) 
+        self.add_api_route("/api/v1/rm_any", self.rm_any_api, methods=["POST"], response_model=RmAnyResponse)
+
+    def add_api_route(self, path: str, endpoint, **kwargs):
+        return self.app.add_api_route(path, endpoint, **kwargs)
+
+
+    def hi_api(self):
+        return "hi."
+
+
+    def rm_any_api(self, req: RmAnyRequest):
+        img = base64_to_img(req.image)
+        mask = base64_to_img(req.mask)
+        ia_path = Path(__file__).parent.absolute() / ".."
+        result_img_arr = inpaint_img_with_lama(
+            np.array(img),
+            np.array(mask),
+            config_p=str(ia_path / "./lama/configs/prediction/default.yaml"),
+            ckpt_p=str(ia_path / "./models/big-lama")
+        )
+        return RmAnyResponse(image=img_to_base64(Image.fromarray(result_img_arr)))
+
+
+
+
+def create_api(app):
+    api = Api(app) 
+    return api
+
+
+
+def wait_on_server():
+    while 1:
+        time.sleep(0.5)
+        
+        
+
 if __name__ == "__main__":
-    demo.launch(share=True)
+    app, local_url, share_url = demo.launch(
+            server_name="0.0.0.0",
+            server_port=27766,
+            prevent_thread_lock=True,
+        )
+    
+    create_api(app)
+    
+    wait_on_server()
     
