@@ -12,7 +12,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.encoders import jsonable_encoder 
 from pydantic import BaseModel, Field, create_model
-from datetime import time 
+import time 
 
 import gradio as gr
 import numpy as np
