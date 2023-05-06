@@ -289,6 +289,8 @@ class Api:
     def rm_any_api(self, req: RmAnyRequest):
         img = base64_to_img(req.image)
         mask = base64_to_img(req.mask)
+        mask = mask.convert('L')
+ 
         ia_path = Path(__file__).parent.absolute() / ".."
         result_img_arr = inpaint_img_with_lama(
             np.array(img),
