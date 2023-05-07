@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.encoders import jsonable_encoder 
 from pydantic import BaseModel, Field, create_model
 import time 
+from typing import Dict, List
 
 import gradio as gr
 import numpy as np
@@ -248,10 +249,10 @@ def base64_to_img(base64_string):
     return img
 
 
-def img_to_base64(img: Image):
+def img_to_base64(img: Image,format='JPEG'):
     _img = img
     buffered = io.BytesIO()
-    _img.save(buffered, format='JPEG')
+    _img.save(buffered, format=format)
     img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
     return img_str
 
@@ -262,6 +263,7 @@ class RmAnyRequest(BaseModel):
                        description="Image to work on, must be a Base64 string containing the image's data.")
     mask: str = Field(default=False, title="Mask Image",
                       description="Image to work on, must be a Base64 string containing the image's data.")
+    shape: List[int] = Field(title="Images", description="List of images to work on. Must be Base64 strings")
 
 
 class RmAnyResponse(BaseModel):
@@ -287,16 +289,18 @@ class Api:
 
 
     def rm_any_api(self, req: RmAnyRequest):
-        img = base64_to_img(req.image)
-        mask = base64_to_img(req.mask)
-        mask = mask.convert('L')
- 
+        img = np.array(base64_to_img(req.image))
+        mask = np.frombuffer(base64.b64decode(req.mask), dtype=np.uint8).reshape( req.shape )
+        
+        d_mask = dilate_mask(mask, 15)
+
         ia_path = Path(__file__).parent.absolute() / ".."
         result_img_arr = inpaint_img_with_lama(
-            np.array(img),
-            np.array(mask),
+            img,
+            d_mask,
             config_p=str(ia_path / "./lama/configs/prediction/default.yaml"),
-            ckpt_p=str(ia_path / "./models/big-lama")
+            ckpt_p=str(ia_path / "./models/big-lama"),
+            device='cuda'
         )
         return RmAnyResponse(image=img_to_base64(Image.fromarray(result_img_arr)))
 
